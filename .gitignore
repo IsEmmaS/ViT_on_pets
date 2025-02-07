@@ -1,0 +1,3 @@
+images/*
+!images/image_save_here
+__pycache__
