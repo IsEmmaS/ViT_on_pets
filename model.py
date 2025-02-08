@@ -2,8 +2,10 @@ import torch
 import torch.nn as nn
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 
+
 class PatchEmbedding(nn.Module):
     """将图像分割成块并嵌入到向量空间"""
+
     def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
         super().__init__()
         self.img_size = img_size
@@ -11,10 +13,7 @@ class PatchEmbedding(nn.Module):
         self.n_patches = (img_size // patch_size) ** 2
 
         self.proj = nn.Conv2d(
-            in_chans,
-            embed_dim,
-            kernel_size=patch_size,
-            stride=patch_size
+            in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
         )
 
     def forward(self, x):
@@ -23,6 +22,7 @@ class PatchEmbedding(nn.Module):
         x = x.flatten(2)  # (B, E, N)
         x = x.transpose(1, 2)  # (B, N, E)
         return x
+
 
 class VisionTransformer(nn.Module):
     def __init__(
@@ -47,17 +47,19 @@ class VisionTransformer(nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, n_patches + 1, embed_dim))
 
         # Transformer编码器
-        self.blocks = nn.ModuleList([
-            TransformerEncoderLayer(
-                d_model=embed_dim,
-                nhead=num_heads,
-                dim_feedforward=int(embed_dim * mlp_ratio),
-                dropout=0.1,
-                activation="gelu",
-                norm_first=True  # Pre-LN结构
-            )
-            for _ in range(depth)
-        ])
+        self.blocks = nn.ModuleList(
+            [
+                TransformerEncoderLayer(
+                    d_model=embed_dim,
+                    nhead=num_heads,
+                    dim_feedforward=int(embed_dim * mlp_ratio),
+                    dropout=0.1,
+                    activation="gelu",
+                    norm_first=True,  # Pre-LN结构
+                )
+                for _ in range(depth)
+            ]
+        )
         self.norm = nn.LayerNorm(embed_dim)
         self.head = nn.Linear(embed_dim, num_classes)
 
@@ -102,6 +104,7 @@ class VisionTransformer(nn.Module):
         # 取CLS token输出并分类
         cls_out = x[:, 0]
         return self.head(cls_out)
+
 
 if __name__ == "__main__":
     vit = VisionTransformer(
