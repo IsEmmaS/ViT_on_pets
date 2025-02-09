@@ -7,7 +7,7 @@ import argparse
 
 from tqdm import tqdm
 from dataloader import create_dataloaders
-from model import VisionTransformer
+from model import VisionTransformer, FocalLoss
 
 
 def train(args):
@@ -35,12 +35,12 @@ def train(args):
     model.to(device)
 
     # 定义损失函数、优化器和学习率调度器
-    criterion = nn.CrossEntropyLoss()
+    criterion = FocalLoss(alpha=0.5, gamma=1.5)
     optimizer = optim.AdamW(
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay
     )
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=args.epochs, eta_min=1e-6
+        optimizer, T_max=args.epochs, eta_min=1e-7
     )
 
     # 混合精度训练支持
@@ -139,7 +139,7 @@ if __name__ == "__main__":
     parser.add_argument("--depth", type=int, default=32, help="Number of Transformer blocks")
     parser.add_argument("--num_heads", type=int, default=12, help="Number of attention heads")
     parser.add_argument("--mlp_ratio", type=float, default=4.0, help="MLP layer ratio")
-    parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
+    parser.add_argument("--batch_size", type=int, default=64, help="Batch size")
     parser.add_argument("--num_workers", type=int, default=4, help="Number of workers for data loading")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")

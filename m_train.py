@@ -9,7 +9,7 @@ from torch import distributed as dist
 from torchvision import transforms
 from torch.utils.data import DataLoader, DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
-from model import VisionTransformer
+from model import VisionTransformer, FocalLoss
 from dataloader import myDataset
 from tqdm import tqdm
 
@@ -78,7 +78,7 @@ def m_train(args):
         )
 
         model = VisionTransformer().to(device)
-        criterion = nn.CrossEntropyLoss()
+        criterion = FocalLoss(alpha=.5, gamma=1.5)
         if ddp:
             model = DDP(model, device_ids=[local_rank])
             gpu_num = dist.get_world_size()

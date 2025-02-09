@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
-from torch.nn import TransformerEncoder, TransformerEncoderLayer
+from torch.nn import functional as F
+from torch.nn import TransformerEncoderLayer
+from torch.utils.checkpoint import checkpoint
 
 
 class PatchEmbedding(nn.Module):
@@ -61,7 +63,13 @@ class VisionTransformer(nn.Module):
             ]
         )
         self.norm = nn.LayerNorm(embed_dim)
-        self.head = nn.Linear(embed_dim, num_classes)
+        self.head = nn.Sequential(
+            nn.LayerNorm(embed_dim),        # 添加归一化
+            nn.Linear(embed_dim, 512),      # 中间维度
+            nn.GELU(),
+            nn.Dropout(0.5),                # 增加Dropout
+            nn.Linear(512, num_classes)
+        )
 
         # 初始化参数
         nn.init.trunc_normal_(self.cls_token, std=0.02)
@@ -78,10 +86,15 @@ class VisionTransformer(nn.Module):
             nn.init.ones_(m.weight)
 
     def forward(self, x):
-        B = x.shape[0]
+        B, C, H, W = x.shape
 
         # 分块嵌入
         x = self.patch_embed(x)  # (B, n_patches, embed_dim)
+        
+        if H != self.patch_embed.img_size[0] or W != self.patch_embed.img_size[1]:
+            pos_embed = self._resize_pos_embed(H, W)
+        else:
+            pos_embed = self.pos_embed
 
         # 添加CLS token
         cls_token = self.cls_token.expand(B, -1, -1)  # (B, 1, embed_dim)
@@ -94,8 +107,11 @@ class VisionTransformer(nn.Module):
         x = x.permute(1, 0, 2)
 
         # 通过Transformer编码器
-        for block in self.blocks:
-            x = block(x)
+        for i, block in enumerate(self.blocks):
+            if self.training and i > 2:
+                x = checkpoint(block, x)
+            else:
+                x = block(x)
 
         # 恢复维度并应用LayerNorm
         x = x.permute(1, 0, 2)  # (B, seq_len, embed_dim)
@@ -104,6 +120,21 @@ class VisionTransformer(nn.Module):
         # 取CLS token输出并分类
         cls_out = x[:, 0]
         return self.head(cls_out)
+
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2.0):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        
+    def forward(self, inputs, targets):
+        BCE_loss = F.cross_entropy(inputs, targets, reduction='none')
+        pt = torch.exp(-BCE_loss)
+        loss = self.alpha * (1-pt)**self.gamma * BCE_loss
+        return loss.mean()
+
+criterion = FocalLoss(alpha=0.5, gamma=1.5)
 
 
 if __name__ == "__main__":
