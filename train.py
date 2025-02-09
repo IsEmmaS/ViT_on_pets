@@ -141,7 +141,7 @@ if __name__ == "__main__":
     parser.add_argument("--mlp_ratio", type=float, default=4.0, help="MLP layer ratio")
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size")
     parser.add_argument("--num_workers", type=int, default=4, help="Number of workers for data loading")
-    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+    parser.add_argument("--lr", type=float, default=3e-5, help="Learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=100, help="Number of epochs")
     parser.add_argument("--amp", action="store_true", help="Enable mixed precision training")
