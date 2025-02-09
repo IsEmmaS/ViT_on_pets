@@ -101,7 +101,7 @@ class VisionTransformer(nn.Module):
         x = torch.cat([cls_token, x], dim=1)  # (B, n_patches+1, embed_dim)
 
         # 添加位置编码
-        x += self.pos_embed
+        x += pos_embed
 
         # 调整维度以适应Transformer输入 (seq_len, B, embed_dim)
         x = x.permute(1, 0, 2)
