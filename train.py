@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
-from torchvision import transforms
-import os
+
 import argparse
 
 
@@ -23,7 +21,7 @@ def train(args):
 
     # 检查 GPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    
     # 定义模型
     model = VisionTransformer(
         img_size=args.image_size,
