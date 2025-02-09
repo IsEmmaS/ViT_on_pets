@@ -91,10 +91,7 @@ class VisionTransformer(nn.Module):
         # 分块嵌入
         x = self.patch_embed(x)  # (B, n_patches, embed_dim)
         
-        if H != self.patch_embed.img_size[0] or W != self.patch_embed.img_size[1]:
-            pos_embed = self._resize_pos_embed(H, W)
-        else:
-            pos_embed = self.pos_embed
+        pos_embed = self.pos_embed
 
         # 添加CLS token
         cls_token = self.cls_token.expand(B, -1, -1)  # (B, 1, embed_dim)
