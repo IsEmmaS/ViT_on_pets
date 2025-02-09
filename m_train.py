@@ -15,7 +15,6 @@ from tqdm import tqdm
 
 
 def m_train(args):
-    # 从环境变量获取local_rank
     local_rank = int(os.environ.get("LOCAL_RANK", -1))
     ddp = local_rank >= 0
     if ddp:
@@ -91,7 +90,7 @@ def m_train(args):
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=args.epochs, eta_min=1e-6
     )
-    scaler = torch.cuda.amp.GradScaler(enabled=args.amp)
+    scaler = torch.amp.GradScaler('cuda',enabled=args.amp)
 
     # 训练循环
     best_test_acc = 0.0
@@ -108,13 +107,13 @@ def m_train(args):
             desc=f"Epoch {epoch+1}/{args.epochs}",
             leave=False,
             dynamic_ncols=True,
-            disable=ddp and dist.get_rank() != 0,
+            disable=ddp and dist.get_rank() == 0,
         )
         for data, target in train_loader_tqdm:
             data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
 
             optimizer.zero_grad()
-            with torch.cuda.amp.autocast(enabled=args.amp):
+            with torch.amp.autocast('cuda',enabled=args.amp):
                 output = model(data)
                 loss = criterion(output, target)
 
