@@ -17,169 +17,173 @@ from tqdm import tqdm
 def m_train(args):
     local_rank = int(os.environ.get("LOCAL_RANK", -1))
     ddp = local_rank >= 0
-    if ddp:
-        torch.cuda.set_device(local_rank)
-        dist.init_process_group(backend="nccl")
-
-    device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
-    all_files = [
-        f for f in os.listdir(args.data_dir) if f.endswith((".jpg", ".jpeg", ".png"))
-    ]
-    all_file_paths = [os.path.join(args.data_dir, f) for f in all_files]
-
-    train_size = int(0.8 * len(all_file_paths))
-    train_files = all_file_paths[:train_size]
-    val_files = all_file_paths[train_size:]
-
-    train_transform = transforms.Compose(
-        [
-            transforms.Resize((args.images_size, args.images_size)),
-            transforms.RandomResizedCrop(args.images_size),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ]
-    )
-    val_transform = transforms.Compose(
-        [
-            transforms.Resize((args.images_size, args.images_size)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ]
-    )
-
-    train_dataset = myDataset(train_files, transform=train_transform)
-    test_dataset = myDataset(val_files, transform=val_transform)
-
-    # 数据加载器
-    if ddp:
-        train_sampler = DistributedSampler(train_dataset)
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=args.batch_size,
-            sampler=train_sampler,
-            num_workers=args.num_workers,
-            pin_memory=True,
-        )
-    else:
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=args.batch_size,
-            shuffle=True,
-            num_workers=args.num_workers,
-            pin_memory=True,
-        )
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        pin_memory=True,
-    )
-
-    model = VisionTransformer().to(device)
-    criterion = nn.CrossEntropyLoss()
-    if ddp:
-        model = DDP(model, device_ids=[local_rank])
-        gpu_num = dist.get_world_size()
-    else:
-        gpu_num = 1
-
-    optimizer = optim.AdamW(
-        model.parameters(), lr=args.lr * gpu_num, weight_decay=args.weight_decay
-    )
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=args.epochs, eta_min=1e-6
-    )
-    scaler = torch.amp.GradScaler('cuda',enabled=args.amp)
-
-    # 训练循环
-    best_test_acc = 0.0
-    for epoch in range(args.epochs):
+    try:
         if ddp:
-            train_sampler.set_epoch(epoch)
-        model.train()
-        train_loss = 0.0
-        correct = 0
-        total = 0
+            torch.cuda.set_device(local_rank)
+            dist.init_process_group(backend="nccl")
 
-        train_loader_tqdm = tqdm(
-            train_loader,
-            desc=f"Epoch {epoch+1}/{args.epochs}",
-            leave=False,
-            dynamic_ncols=True,
-            disable=ddp and dist.get_rank() == 0,
+        device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
+        all_files = [
+            f for f in os.listdir(args.data_dir) if f.endswith((".jpg", ".jpeg", ".png"))
+        ]
+        all_file_paths = [os.path.join(args.data_dir, f) for f in all_files]
+
+        train_size = int(0.8 * len(all_file_paths))
+        train_files = all_file_paths[:train_size]
+        val_files = all_file_paths[train_size:]
+
+        train_transform = transforms.Compose(
+            [
+                transforms.Resize((args.images_size, args.images_size)),
+                transforms.RandomResizedCrop(args.images_size),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ]
         )
-        for data, target in train_loader_tqdm:
-            data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
+        val_transform = transforms.Compose(
+            [
+                transforms.Resize((args.images_size, args.images_size)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ]
+        )
 
-            optimizer.zero_grad()
-            with torch.amp.autocast('cuda',enabled=args.amp):
-                output = model(data)
-                loss = criterion(output, target)
+        train_dataset = myDataset(train_files, transform=train_transform)
+        test_dataset = myDataset(val_files, transform=val_transform)
 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+        # 数据加载器
+        if ddp:
+            train_sampler = DistributedSampler(train_dataset)
+            train_loader = DataLoader(
+                train_dataset,
+                batch_size=args.batch_size,
+                sampler=train_sampler,
+                num_workers=args.num_workers,
+                pin_memory=True,
+            )
+        else:
+            train_loader = DataLoader(
+                train_dataset,
+                batch_size=args.batch_size,
+                shuffle=True,
+                num_workers=args.num_workers,
+                pin_memory=True,
+            )
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            pin_memory=True,
+        )
 
-            train_loss += loss.item() * data.size(0)
-            _, predicted = output.max(1)
-            total += target.size(0)
-            correct += predicted.eq(target).sum().item()
+        model = VisionTransformer().to(device)
+        criterion = nn.CrossEntropyLoss()
+        if ddp:
+            model = DDP(model, device_ids=[local_rank])
+            gpu_num = dist.get_world_size()
+        else:
+            gpu_num = 1
 
-            postfix = {
-                "loss": f"{loss.item():.4f}",
-                "lr": f"{optimizer.param_groups[0]['lr']:.2e}",
-            }
-            train_loader_tqdm.set_postfix(postfix)
+        optimizer = optim.AdamW(
+            model.parameters(), lr=args.lr * gpu_num, weight_decay=args.weight_decay
+        )
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=args.epochs, eta_min=1e-6
+        )
+        scaler = torch.amp.GradScaler('cuda',enabled=args.amp)
 
-        scheduler.step()
-
-        avg_train_loss = train_loss / total
-        train_acc = correct / total
-
-        # 验证循环（仅在主进程执行）
-        if not ddp or (ddp and dist.get_rank() == 0):
-            model.eval()
-            test_loss = 0.0
+        # 训练循环
+        best_test_acc = 0.0
+        for epoch in range(args.epochs):
+            if ddp:
+                train_sampler.set_epoch(epoch)
+            model.train()
+            train_loss = 0.0
             correct = 0
             total = 0
 
-            test_loader_tqdm = tqdm(
-                test_loader,
-                desc="Testing",
+            train_loader_tqdm = tqdm(
+                train_loader,
+                desc=f"Epoch {epoch+1}/{args.epochs}",
                 leave=False,
                 dynamic_ncols=True,
-                disable=ddp and dist.get_rank() != 0,
+                disable=ddp and dist.get_rank() == 0,
             )
-            with torch.no_grad():
-                for data, target in test_loader_tqdm:
-                    data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
+            for data, target in train_loader_tqdm:
+                data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
+
+                optimizer.zero_grad()
+                with torch.amp.autocast('cuda',enabled=args.amp):
                     output = model(data)
                     loss = criterion(output, target)
 
-                    test_loss += loss.item() * data.size(0)
-                    _, pred = output.max(1)
-                    total += data.size(0)
-                    correct += pred.eq(target).sum().item()
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
 
-                    postfix = {"loss": f"{loss.item():.4f}"}
-                    test_loader_tqdm.set_postfix(postfix)
+                train_loss += loss.item() * data.size(0)
+                _, predicted = output.max(1)
+                total += target.size(0)
+                correct += predicted.eq(target).sum().item()
 
-            avg_test_loss = test_loss / total
-            test_acc = correct / total
+                postfix = {
+                    "loss": f"{loss.item():.4f}",
+                    "lr": f"{optimizer.param_groups[0]['lr']:.2e}",
+                }
+                train_loader_tqdm.set_postfix(postfix)
 
-            print(
-                f"Epoch [{epoch+1}/{args.epochs}] | "
-                f"Train Loss: {avg_train_loss:.4f} | Train Acc: {train_acc:.4f} | "
-                f"Val Loss: {avg_test_loss:.4f} | Val Acc: {test_acc:.4f} | "
-                f"Lr: {optimizer.param_groups[0]['lr']:.2e}"
-            )
+            scheduler.step()
 
-            if test_acc > best_test_acc:
-                best_test_acc = test_acc
-                model_to_save = model.module if ddp else model
-                torch.save(model_to_save.state_dict(), "best_model.pth")
+            avg_train_loss = train_loss / total
+            train_acc = correct / total
 
+            # 验证循环（仅在主进程执行）
+            if not ddp or (ddp and dist.get_rank() == 0):
+                model.eval()
+                test_loss = 0.0
+                correct = 0
+                total = 0
+
+                test_loader_tqdm = tqdm(
+                    test_loader,
+                    desc="Testing",
+                    leave=False,
+                    dynamic_ncols=True,
+                    disable=ddp and dist.get_rank() != 0,
+                )
+                with torch.no_grad():
+                    for data, target in test_loader_tqdm:
+                        data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
+                        output = model(data)
+                        loss = criterion(output, target)
+
+                        test_loss += loss.item() * data.size(0)
+                        _, pred = output.max(1)
+                        total += data.size(0)
+                        correct += pred.eq(target).sum().item()
+
+                        postfix = {"loss": f"{loss.item():.4f}"}
+                        test_loader_tqdm.set_postfix(postfix)
+
+                avg_test_loss = test_loss / total
+                test_acc = correct / total
+
+                print(
+                    f"Epoch [{epoch+1}/{args.epochs}] | "
+                    f"Train Loss: {avg_train_loss:.4f} | Train Acc: {train_acc:.4f} | "
+                    f"Val Loss: {avg_test_loss:.4f} | Val Acc: {test_acc:.4f} | "
+                    f"Lr: {optimizer.param_groups[0]['lr']:.2e}"
+                )
+
+                if test_acc > best_test_acc:
+                    best_test_acc = test_acc
+                    model_to_save = model.module if ddp else model
+                    torch.save(model_to_save.state_dict(), "best_model.pth")
+        
+    finally:
+        if ddp and dist.is_initialized():
+            dist.destroy_process_group()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
