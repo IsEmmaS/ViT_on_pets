@@ -159,7 +159,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_dir", type=str, default="images", help="Path to the data directory"
     )
-    parser.add_argument("--image_size", type=int, default=224, help="Image size")
+    parser.add_argument("--images_size", type=int, default=224, help="Image size")
     parser.add_argument("--patch_size", type=int, default=16, help="Patch size")
     parser.add_argument("--num_classes", type=int, default=37, help="Number of classes")
     parser.add_argument(
