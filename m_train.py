@@ -155,7 +155,7 @@ def m_train(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--local_rank", type=int, default=-1)
+    parser.add_argument("--local_rank", "--local-rank", type=int, default=-1)
     parser.add_argument(
         "--data_dir", type=str, default="images", help="Path to the data directory"
     )
