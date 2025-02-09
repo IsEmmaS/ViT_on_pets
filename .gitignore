@@ -1,3 +1,5 @@
 images/*
 !images/image_save_here
 __pycache__
+
+best_model.pth
