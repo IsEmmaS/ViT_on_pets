@@ -57,15 +57,16 @@ def create_dataloaders(data_dir, img_size=224, batch_size=32, num_workers=4):
     val_files = all_file_paths[train_size:]
 
     # 定义数据变换
-    train_transform = transforms.Compose(
-        [
-            transforms.Resize((img_size, img_size)),
-            transforms.RandomResizedCrop(img_size),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ]
-    )
+    # 更新数据增强策略
+    train_transform = transforms.Compose([
+        transforms.RandomResizedCrop(224, scale=(0.4, 1.0)),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandAugment(num_ops=3, magnitude=15),  # 强化增强
+        transforms.ColorJitter(0.2, 0.2, 0.2),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        transforms.RandomErasing(p=0.5) 
+    ])
     val_transform = transforms.Compose(
         [
             transforms.Resize((img_size, img_size)),

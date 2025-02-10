@@ -7,7 +7,7 @@ import argparse
 
 from tqdm import tqdm
 from dataloader import create_dataloaders
-from model import VisionTransformer, FocalLoss
+from model import VisionTransformer, FocalLoss, l1_regularization
 
 
 def train(args):
@@ -66,7 +66,9 @@ def train(args):
 
             with torch.amp.autocast("cuda", enabled=args.amp):
                 outputs = model(images)
-                loss = criterion(outputs, labels)
+                f_loss = criterion(outputs, labels)
+                l1_loss = l1_regularization(model, lambda_l1=1e-2)
+                loss = f_loss + l1_loss
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -118,7 +120,8 @@ def train(args):
         print(
             f"Epoch [{epoch+1}/{args.epochs}] | "
             f"Train Loss: {avg_train_loss:.4f} | Train Acc: {train_accuracy:.4f} | "
-            f"Val Loss: {avg_val_loss:.4f} | Val Acc: {val_accuracy:.4f}"
+            f"L1 Loss: {l1_loss:.4f} |"
+            f"Val Loss: {avg_val_loss:.4f} | Val Acc: {val_accuracy:.4f} |"
             f"Lr: {optimizer.param_groups[0]['lr']:.2e}"
         )
 

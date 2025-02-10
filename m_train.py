@@ -9,7 +9,7 @@ from torch import distributed as dist
 from torchvision import transforms
 from torch.utils.data import DataLoader, DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
-from model import VisionTransformer, FocalLoss
+from model import VisionTransformer, FocalLoss, l1_regularization
 from dataloader import myDataset
 from tqdm import tqdm
 
@@ -88,8 +88,22 @@ def m_train(args):
         optimizer = optim.AdamW(
             model.parameters(), lr=args.lr * gpu_num, weight_decay=args.weight_decay
         )
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=args.epochs, eta_min=1e-6
+        scheduler = optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[
+            optim.lr_scheduler.LinearLR(
+                optimizer, 
+                start_factor=0.01,
+                end_factor=1.0,
+                total_iters=10  # 前10个epoch warmup
+            ),
+            optim.lr_scheduler.CosineAnnealingLR(
+                optimizer,
+                T_max=50,
+                eta_min=1e-6
+            )
+        ],
+        milestones=[10]
         )
         scaler = torch.amp.GradScaler('cuda',enabled=args.amp)
 
@@ -116,7 +130,9 @@ def m_train(args):
                 optimizer.zero_grad()
                 with torch.amp.autocast('cuda',enabled=args.amp):
                     output = model(data)
-                    loss = criterion(output, target)
+                    f_loss = criterion(output, target)
+                    l1_loss = l1_regularization(model, lambda_l1=1e-2)
+                    loss = f_loss + l1_loss
 
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
@@ -172,6 +188,7 @@ def m_train(args):
                 print(
                     f"Epoch [{epoch+1}/{args.epochs}] | "
                     f"Train Loss: {avg_train_loss:.4f} | Train Acc: {train_acc:.4f} | "
+                    f"L1 Loss {l1_loss:.4f} |"
                     f"Val Loss: {avg_test_loss:.4f} | Val Acc: {test_acc:.4f} | "
                     f"Lr: {optimizer.param_groups[0]['lr']:.2e}"
                 )

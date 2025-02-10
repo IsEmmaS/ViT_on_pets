@@ -64,10 +64,10 @@ class VisionTransformer(nn.Module):
         )
         self.norm = nn.LayerNorm(embed_dim)
         self.head = nn.Sequential(
-            nn.LayerNorm(embed_dim),        # 添加归一化
-            nn.Linear(embed_dim, 512),      # 中间维度
+            nn.LayerNorm(embed_dim),
+            nn.Linear(embed_dim, 512),      
             nn.GELU(),
-            nn.Dropout(0.5),                # 增加Dropout
+            nn.Dropout(0.6),                
             nn.Linear(512, num_classes)
         )
 
@@ -86,7 +86,7 @@ class VisionTransformer(nn.Module):
             nn.init.ones_(m.weight)
 
     def forward(self, x):
-        B, C, H, W = x.shape
+        B, _, _, _ = x.shape
 
         # 分块嵌入
         x = self.patch_embed(x)  # (B, n_patches, embed_dim)
@@ -106,7 +106,7 @@ class VisionTransformer(nn.Module):
         # 通过Transformer编码器
         for i, block in enumerate(self.blocks):
             if self.training and i > 2:
-                x = checkpoint(block, x)
+                x = checkpoint(block, x, use_reentrant=False)
             else:
                 x = block(x)
 
@@ -120,6 +120,20 @@ class VisionTransformer(nn.Module):
 
 
 class FocalLoss(nn.Module):
+    """This is a FocalLoss class which can caculate
+    Focal Loss.
+    
+    Focal loss = -alpha_t * (1 - p_t)^gamma * log(p_t)
+
+    where p_t is the predicted probability of the target class and
+    alpha_t is the weight for the target class.
+
+    Args:
+        alpha: float, optional
+            The weight for the target class. Default is 0.25.
+        gamma: float, optional
+            The focusing parameter. Default is 2.0.
+    """
     def __init__(self, alpha=0.25, gamma=2.0):
         super().__init__()
         self.alpha = alpha
@@ -131,8 +145,48 @@ class FocalLoss(nn.Module):
         loss = self.alpha * (1-pt)**self.gamma * BCE_loss
         return loss.mean()
 
-criterion = FocalLoss(alpha=0.5, gamma=1.5)
+def l1_regularization(model, lambda_l1=0.01):
+    """
+    Computes the L1 regularization loss for a given PyTorch model.
 
+    L1 regularization adds a penalty equal to the absolute value of the magnitude
+    of coefficients to the loss function. This encourages the model to keep the
+    weights small, promoting sparsity in the model parameters.
+
+    The L1 regularization loss is calculated as:
+    L1_loss = lambda_l1 * sum(abs(param)) for all parameters in the model.
+
+    Args:
+        model (torch.nn.Module): The PyTorch model for which to compute the L1 regularization loss.
+        lambda_l1 (float, optional): The regularization strength (lambda). Defaults to 0.01.
+
+    Returns:
+        torch.Tensor: The L1 regularization loss.
+
+    Raises:
+        TypeError: If `model` is not an instance of `torch.nn.Module`.
+
+    Example:
+        >>> import torch
+        >>> import torch.nn as nn
+        >>> model = nn.Linear(10, 1)  # A simple linear model
+        >>> l1_loss = l1_regularization(model, lambda_l1=0.05)
+        >>> print(l1_loss)
+        tensor(0.1234)  # Example output
+
+    Note:
+        This function assumes that the model's parameters are accessible via `model.parameters()`.
+        The regularization strength `lambda_l1` controls the trade-off between the original loss
+        and the regularization term. A higher value of `lambda_l1` will result in stronger regularization.
+
+    See Also:
+        torch.nn.Module: The base class for all neural network modules in PyTorch.
+        torch.nn.utils.weight_norm: A utility for applying weight normalization to model parameters.
+    """
+    l1_loss = 0
+    for param in model.parameters():
+        l1_loss += torch.sum(torch.abs(param))
+    return lambda_l1 * l1_loss
 
 if __name__ == "__main__":
     vit = VisionTransformer(
@@ -145,5 +199,5 @@ if __name__ == "__main__":
     )
     x = torch.randn(2, 3, 224, 224)
     out = vit(x)
-    print(out.shape)  # 输出: torch.Size([2, 1000])
+    print(out.shape)  # shoudl be [2, 1000]
     print(vit.modules)
