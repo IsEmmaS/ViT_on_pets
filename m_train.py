@@ -131,7 +131,7 @@ def m_train(args):
                 with torch.amp.autocast('cuda',enabled=args.amp):
                     output = model(data)
                     f_loss = criterion(output, target)
-                    l1_loss = l1_regularization(model, lambda_l1=1e-2)
+                    l1_loss = l1_regularization(model, lambda_l1=args.lambda_l1)
                     loss = f_loss + l1_loss
 
                 scaler.scale(loss).backward()
@@ -218,6 +218,7 @@ if __name__ == "__main__":
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
     parser.add_argument("--epochs", type=int, default=100, help="Number of epochs")
     parser.add_argument("--amp", action="store_true", help="Enable mixed precision training")
+    parser.add_argument("--lambda_l1", type=float, default=1e-3, help="Strangth of L1 regu")
     args = parser.parse_args()
 
     m_train(args)
