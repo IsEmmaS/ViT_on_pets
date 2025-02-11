@@ -20,11 +20,12 @@ class myDataset(Dataset):
 
     def _create_class_to_idx(self):
         """创建标签到索引的映射"""
-        classes = set()
+        classes = []
         for filename in self.file_paths:
             filename_without_ext = os.path.splitext(filename)[0]
             label = filename_without_ext.rsplit("_", 1)[0]
-            classes.add(label)
+            if label not in classes:
+                classes.append(label)
         # print(classes)
         sorted_classes = sorted(classes)
         return {cls: idx for idx, cls in enumerate(sorted_classes)}
