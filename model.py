@@ -70,6 +70,7 @@ class VisionTransformer(nn.Module):
             nn.Dropout(0.6),                
             nn.Linear(512, num_classes)
         )
+        self.depth = depth
 
         # 初始化参数
         nn.init.trunc_normal_(self.cls_token, std=0.02)
@@ -109,6 +110,8 @@ class VisionTransformer(nn.Module):
                 x = checkpoint(block, x, use_reentrant=False)
             else:
                 x = block(x)
+            # Each block has shape : (len of seq + cls token, batch size, hidden dim size)
+            # print(f'Transformer {i + 1} layers output shape is :',x.shape)
 
         # 恢复维度并应用LayerNorm
         x = x.permute(1, 0, 2)  # (B, seq_len, embed_dim)

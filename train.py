@@ -120,7 +120,7 @@ def train(args):
         print(
             f"Epoch [{epoch+1}/{args.epochs}] | "
             f"Train Loss: {avg_train_loss:.4f} | Train Acc: {train_accuracy:.4f} | "
-            f"L1 Loss: {l1_loss:.4f} |"
+            f"L1 Loss: {l1_loss:.4f} | "
             f"Val Loss: {avg_val_loss:.4f} | Val Acc: {val_accuracy:.4f} |"
             f"Lr: {optimizer.param_groups[0]['lr']:.2e}"
         )
